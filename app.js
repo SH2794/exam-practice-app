@@ -2,312 +2,412 @@ const QUESTION_COUNT = 5;
 const CHOICE_LABELS = ["A", "B", "C", "D"];
 const ERROR_NOT_ENOUGH_QUESTIONS = "選択条件に一致する問題が5問未満です。条件を変更してください。";
 
-const state = {
-  questions: [],
-  quizQuestions: [],
-  currentIndex: 0,
-  correctCount: 0,
-  wrongCount: 0,
-  selectedChoiceIndex: null,
-  answered: false
-};
-
-const elements = {
-  homeSection: document.querySelector("#home-section"),
-  quizSection: document.querySelector("#quiz-section"),
-  resultSection: document.querySelector("#result-section"),
-  fieldSelect: document.querySelector("#field-select"),
-  difficultySelect: document.querySelector("#difficulty-select"),
-  modeSelect: document.querySelector("#mode-select"),
-  startButton: document.querySelector("#start-button"),
-  homeError: document.querySelector("#home-error"),
-  questionCounter: document.querySelector("#question-counter"),
-  quizMetaField: document.querySelector("#quiz-meta-field"),
-  quizMetaDifficulty: document.querySelector("#quiz-meta-difficulty"),
-  quizMetaCategory: document.querySelector("#quiz-meta-category"),
-  questionText: document.querySelector("#question-text"),
-  choicesContainer: document.querySelector("#choices-container"),
-  submitAnswerButton: document.querySelector("#submit-answer-button"),
-  nextQuestionButton: document.querySelector("#next-question-button"),
-  questionMessage: document.querySelector("#question-message"),
-  explanationArea: document.querySelector("#explanation-area"),
-  resultTotal: document.querySelector("#result-total"),
-  resultCorrect: document.querySelector("#result-correct"),
-  resultWrong: document.querySelector("#result-wrong"),
-  resultAccuracy: document.querySelector("#result-accuracy"),
-  homeButton: document.querySelector("#home-button")
-};
-
-function initialize() {
-  showHome();
-  elements.startButton.addEventListener("click", startQuiz);
-  elements.choicesContainer.addEventListener("click", selectChoice);
-  elements.submitAnswerButton.addEventListener("click", submitAnswer);
-  elements.nextQuestionButton.addEventListener("click", goToNextQuestion);
-  elements.homeButton.addEventListener("click", returnHome);
-}
-
-async function loadQuestions() {
-  const response = await fetch("./question.json");
-
-  if (!response.ok) {
-    throw new Error("question.json の読み込みに失敗しました。");
+class Question {
+  constructor(data) {
+    this.id = data.id;
+    this.exam = data.exam;
+    this.field = data.field;
+    this.category = data.category;
+    this.difficulty = data.difficulty;
+    this.question = data.question;
+    this.choices = Array.isArray(data.choices) ? [...data.choices] : [];
+    this.answerIndex = data.answerIndex;
+    this.explanation = data.explanation;
+    this.validate();
   }
 
-  const questions = await response.json();
-
-  if (!Array.isArray(questions)) {
-    throw new Error("question.json の形式が配列ではありません。");
-  }
-
-  questions.forEach(validateQuestion);
-  state.questions = questions;
-}
-
-function validateQuestion(question) {
-  if (!question || typeof question !== "object") {
-    throw new Error("問題データが不正です。");
-  }
-
-  if (!question.id || !question.field || !question.category || !question.difficulty || !question.question) {
-    throw new Error("問題データの必須項目が不足しています。");
-  }
-
-  if (!Array.isArray(question.choices) || question.choices.length !== 4) {
-    throw new Error(`問題 ${question.id} の選択肢数が4件ではありません。`);
-  }
-
-  if (!Number.isInteger(question.answerIndex) || question.answerIndex < 0 || question.answerIndex > 3) {
-    throw new Error(`問題 ${question.id} のanswerIndexが不正です。`);
-  }
-}
-
-async function startQuiz() {
-  clearHomeError();
-
-  try {
-    if (state.questions.length === 0) {
-      await loadQuestions();
+  validate() {
+    if (!this.id || !this.field || !this.category || !this.difficulty || !this.question) {
+      throw new Error("問題データの必須項目が不足しています。");
     }
 
-    const field = elements.fieldSelect.value;
-    const difficulty = elements.difficultySelect.value;
-    const mode = elements.modeSelect.value;
-    const questionSet = createQuestionSet(field, difficulty, mode);
+    if (this.choices.length !== 4) {
+      throw new Error(`問題 ${this.id} の選択肢数が4件ではありません。`);
+    }
 
-    resetQuizState(questionSet);
-    showQuiz();
-    renderQuestion();
-  } catch (error) {
-    showHomeError(error.message || "問題データの読み込み中にエラーが発生しました。");
+    if (!Number.isInteger(this.answerIndex) || this.answerIndex < 0 || this.answerIndex > 3) {
+      throw new Error(`問題 ${this.id} のanswerIndexが不正です。`);
+    }
+  }
+
+  isCorrect(selectedIndex) {
+    return selectedIndex === this.answerIndex;
+  }
+
+  getCorrectChoice() {
+    return this.choices[this.answerIndex];
+  }
+
+  getCorrectLabel() {
+    return CHOICE_LABELS[this.answerIndex];
   }
 }
 
-function createQuestionSet(field, difficulty, mode) {
-  const matchedQuestions = state.questions.filter((question) => {
-    const matchesField = field === "all" || question.field === field;
-    const matchesDifficulty = difficulty === "all" || question.difficulty === difficulty;
-    return matchesField && matchesDifficulty;
-  });
+class QuizSession {
+  constructor(questions) {
+    if (!Array.isArray(questions) || questions.length !== QUESTION_COUNT) {
+      throw new Error("演習は5問で開始する必要があります。");
+    }
 
-  if (matchedQuestions.length < QUESTION_COUNT) {
-    throw new Error(ERROR_NOT_ENOUGH_QUESTIONS);
+    this.questions = questions;
+    this.currentQuestionIndex = 0;
+    this.correctCount = 0;
+    this.wrongCount = 0;
+    this.currentQuestionAnswered = false;
   }
 
-  const orderedQuestions = mode === "random" ? shuffleQuestions(matchedQuestions) : matchedQuestions;
-  return orderedQuestions.slice(0, QUESTION_COUNT);
-}
-
-function shuffleQuestions(questions) {
-  const shuffledQuestions = [...questions];
-
-  for (let index = shuffledQuestions.length - 1; index > 0; index -= 1) {
-    const randomIndex = Math.floor(Math.random() * (index + 1));
-    [shuffledQuestions[index], shuffledQuestions[randomIndex]] = [shuffledQuestions[randomIndex], shuffledQuestions[index]];
+  get totalQuestions() {
+    return this.questions.length;
   }
 
-  return shuffledQuestions;
-}
-
-function resetQuizState(questionSet) {
-  state.quizQuestions = questionSet;
-  state.currentIndex = 0;
-  state.correctCount = 0;
-  state.wrongCount = 0;
-  state.selectedChoiceIndex = null;
-  state.answered = false;
-}
-
-function getCurrentQuestion() {
-  return state.quizQuestions[state.currentIndex];
-}
-
-function renderQuestion() {
-  const question = getCurrentQuestion();
-  clearQuestionState();
-  elements.questionCounter.textContent = `第 ${state.currentIndex + 1} / ${QUESTION_COUNT} 問`;
-  elements.quizMetaField.textContent = question.field;
-  elements.quizMetaDifficulty.textContent = question.difficulty;
-  elements.quizMetaCategory.textContent = question.category;
-  elements.questionText.textContent = question.question;
-  elements.choicesContainer.innerHTML = "";
-
-  question.choices.forEach((choice, index) => {
-    const button = document.createElement("button");
-    const label = document.createElement("span");
-    const text = document.createElement("span");
-
-    button.type = "button";
-    button.className = "choice-button";
-    button.dataset.index = String(index);
-    label.className = "choice-label";
-    label.textContent = CHOICE_LABELS[index];
-    text.className = "choice-text";
-    text.textContent = choice;
-
-    button.append(label, text);
-    elements.choicesContainer.append(button);
-  });
-}
-
-function selectChoice(event) {
-  const choiceButton = event.target.closest(".choice-button");
-
-  if (!choiceButton || state.answered) {
-    return;
+  getCurrentQuestion() {
+    return this.questions[this.currentQuestionIndex];
   }
 
-  state.selectedChoiceIndex = Number(choiceButton.dataset.index);
-  renderSelectedChoice();
-}
-
-function renderSelectedChoice() {
-  elements.choicesContainer.querySelectorAll(".choice-button").forEach((button) => {
-    button.classList.toggle("selected", Number(button.dataset.index) === state.selectedChoiceIndex);
-  });
-}
-
-function submitAnswer() {
-  if (state.answered) {
-    showQuestionError("この問題はすでに解答済みです。次の問題へ進んでください。");
-    return;
+  getCurrentQuestionNumber() {
+    return this.currentQuestionIndex + 1;
   }
 
-  if (state.selectedChoiceIndex === null) {
-    showQuestionError("選択肢を選んでください。");
-    return;
+  isCurrentQuestionAnswered() {
+    return this.currentQuestionAnswered;
   }
 
-  const question = getCurrentQuestion();
-  const correct = isCorrect(question, state.selectedChoiceIndex);
-  state.answered = true;
+  recordAnswer(selectedIndex) {
+    if (this.currentQuestionAnswered) {
+      return {
+        accepted: false,
+        correct: null
+      };
+    }
 
-  if (correct) {
-    state.correctCount += 1;
-  } else {
-    state.wrongCount += 1;
+    const question = this.getCurrentQuestion();
+    const correct = question.isCorrect(selectedIndex);
+    this.currentQuestionAnswered = true;
+
+    if (correct) {
+      this.correctCount += 1;
+    } else {
+      this.wrongCount += 1;
+    }
+
+    return {
+      accepted: true,
+      correct
+    };
   }
 
-  showAnswerResult(correct, getCorrectLabel(question));
-  showExplanation(question.explanation);
-}
+  moveToNextQuestion() {
+    if (!this.currentQuestionAnswered) {
+      return false;
+    }
 
-function isCorrect(question, selectedIndex) {
-  return selectedIndex === question.answerIndex;
-}
-
-function getCorrectLabel(question) {
-  return CHOICE_LABELS[question.answerIndex];
-}
-
-function goToNextQuestion() {
-  if (!state.answered) {
-    showQuestionError("先に解答してください。");
-    return;
+    this.currentQuestionIndex += 1;
+    this.currentQuestionAnswered = false;
+    return true;
   }
 
-  state.currentIndex += 1;
-
-  if (state.currentIndex >= QUESTION_COUNT) {
-    renderFinalResult();
-    showResult();
-    return;
+  isFinished() {
+    return this.currentQuestionIndex >= this.questions.length;
   }
 
-  state.selectedChoiceIndex = null;
-  state.answered = false;
-  renderQuestion();
+  getAccuracyRate() {
+    return Math.round((this.correctCount / this.totalQuestions) * 100);
+  }
 }
 
-function renderFinalResult() {
-  const accuracyRate = Math.round((state.correctCount / QUESTION_COUNT) * 100);
-  elements.resultTotal.textContent = `${QUESTION_COUNT}問`;
-  elements.resultCorrect.textContent = `${state.correctCount}問`;
-  elements.resultWrong.textContent = `${state.wrongCount}問`;
-  elements.resultAccuracy.textContent = `${accuracyRate}%`;
+class QuestionRepository {
+  constructor(dataUrl = "./question.json") {
+    this.dataUrl = dataUrl;
+    this.questions = [];
+  }
+
+  async load() {
+    const response = await fetch(this.dataUrl);
+
+    if (!response.ok) {
+      throw new Error("question.json の読み込みに失敗しました。");
+    }
+
+    const data = await response.json();
+
+    if (!Array.isArray(data)) {
+      throw new Error("question.json の形式が配列ではありません。");
+    }
+
+    this.questions = data.map((item) => new Question(item));
+  }
+
+  findByCondition(field, difficulty) {
+    return this.questions.filter((question) => {
+      const matchesField = field === "all" || question.field === field;
+      const matchesDifficulty = difficulty === "all" || question.difficulty === difficulty;
+      return matchesField && matchesDifficulty;
+    });
+  }
+
+  createQuestionSet(field, difficulty, mode) {
+    const matchedQuestions = this.findByCondition(field, difficulty);
+
+    if (matchedQuestions.length < QUESTION_COUNT) {
+      throw new Error(ERROR_NOT_ENOUGH_QUESTIONS);
+    }
+
+    const orderedQuestions = mode === "random" ? this.shuffle(matchedQuestions) : matchedQuestions;
+    return orderedQuestions.slice(0, QUESTION_COUNT);
+  }
+
+  shuffle(questions) {
+    const shuffledQuestions = [...questions];
+
+    for (let index = shuffledQuestions.length - 1; index > 0; index -= 1) {
+      const randomIndex = Math.floor(Math.random() * (index + 1));
+      [shuffledQuestions[index], shuffledQuestions[randomIndex]] = [shuffledQuestions[randomIndex], shuffledQuestions[index]];
+    }
+
+    return shuffledQuestions;
+  }
 }
 
-function returnHome() {
-  state.quizQuestions = [];
-  state.currentIndex = 0;
-  state.correctCount = 0;
-  state.wrongCount = 0;
-  state.selectedChoiceIndex = null;
-  state.answered = false;
-  showHome();
+class QuizView {
+  constructor() {
+    this.homeSection = document.querySelector("#home-section");
+    this.quizSection = document.querySelector("#quiz-section");
+    this.resultSection = document.querySelector("#result-section");
+    this.fieldSelect = document.querySelector("#field-select");
+    this.difficultySelect = document.querySelector("#difficulty-select");
+    this.modeSelect = document.querySelector("#mode-select");
+    this.startButton = document.querySelector("#start-button");
+    this.homeError = document.querySelector("#home-error");
+    this.questionCounter = document.querySelector("#question-counter");
+    this.quizMetaField = document.querySelector("#quiz-meta-field");
+    this.quizMetaDifficulty = document.querySelector("#quiz-meta-difficulty");
+    this.quizMetaCategory = document.querySelector("#quiz-meta-category");
+    this.questionText = document.querySelector("#question-text");
+    this.choicesContainer = document.querySelector("#choices-container");
+    this.submitAnswerButton = document.querySelector("#submit-answer-button");
+    this.nextQuestionButton = document.querySelector("#next-question-button");
+    this.questionMessage = document.querySelector("#question-message");
+    this.explanationArea = document.querySelector("#explanation-area");
+    this.resultTotal = document.querySelector("#result-total");
+    this.resultCorrect = document.querySelector("#result-correct");
+    this.resultWrong = document.querySelector("#result-wrong");
+    this.resultAccuracy = document.querySelector("#result-accuracy");
+    this.homeButton = document.querySelector("#home-button");
+  }
+
+  showHome() {
+    this.homeSection.classList.remove("hidden");
+    this.quizSection.classList.add("hidden");
+    this.resultSection.classList.add("hidden");
+    this.clearHomeError();
+    this.clearQuestionState();
+  }
+
+  showQuiz() {
+    this.homeSection.classList.add("hidden");
+    this.quizSection.classList.remove("hidden");
+    this.resultSection.classList.add("hidden");
+  }
+
+  showResult() {
+    this.homeSection.classList.add("hidden");
+    this.quizSection.classList.add("hidden");
+    this.resultSection.classList.remove("hidden");
+  }
+
+  getSelectedConditions() {
+    return {
+      field: this.fieldSelect.value,
+      difficulty: this.difficultySelect.value,
+      mode: this.modeSelect.value
+    };
+  }
+
+  renderQuestion(question, questionNumber, totalQuestions) {
+    this.clearQuestionState();
+    this.questionCounter.textContent = `第 ${questionNumber} / ${totalQuestions} 問`;
+    this.quizMetaField.textContent = question.field;
+    this.quizMetaDifficulty.textContent = question.difficulty;
+    this.quizMetaCategory.textContent = question.category;
+    this.questionText.textContent = question.question;
+    this.choicesContainer.innerHTML = "";
+
+    question.choices.forEach((choice, index) => {
+      const button = document.createElement("button");
+      const label = document.createElement("span");
+      const text = document.createElement("span");
+
+      button.type = "button";
+      button.className = "choice-button";
+      button.dataset.index = String(index);
+      label.className = "choice-label";
+      label.textContent = CHOICE_LABELS[index];
+      text.className = "choice-text";
+      text.textContent = choice;
+
+      button.append(label, text);
+      this.choicesContainer.append(button);
+    });
+  }
+
+  renderSelectedChoice(selectedChoiceIndex) {
+    this.choicesContainer.querySelectorAll(".choice-button").forEach((button) => {
+      button.classList.toggle("selected", Number(button.dataset.index) === selectedChoiceIndex);
+    });
+  }
+
+  showHomeError(message) {
+    this.homeError.textContent = message;
+  }
+
+  clearHomeError() {
+    this.homeError.textContent = "";
+  }
+
+  showQuestionError(message) {
+    this.questionMessage.textContent = message;
+    this.questionMessage.className = "message error";
+  }
+
+  showAnswerResult(correct, correctLabel) {
+    this.questionMessage.textContent = correct ? "正解です。" : `不正解です。正解は ${correctLabel} です。`;
+    this.questionMessage.className = correct ? "message correct" : "message wrong";
+  }
+
+  showExplanation(explanation) {
+    this.explanationArea.textContent = explanation;
+    this.explanationArea.classList.remove("hidden");
+  }
+
+  clearQuestionState() {
+    this.questionMessage.textContent = "";
+    this.questionMessage.className = "message";
+    this.explanationArea.textContent = "";
+    this.explanationArea.classList.add("hidden");
+    this.choicesContainer.querySelectorAll(".choice-button").forEach((button) => {
+      button.classList.remove("selected");
+    });
+  }
+
+  renderFinalResult(session) {
+    this.resultTotal.textContent = `${session.totalQuestions}問`;
+    this.resultCorrect.textContent = `${session.correctCount}問`;
+    this.resultWrong.textContent = `${session.wrongCount}問`;
+    this.resultAccuracy.textContent = `${session.getAccuracyRate()}%`;
+  }
 }
 
-function showHome() {
-  elements.homeSection.classList.remove("hidden");
-  elements.quizSection.classList.add("hidden");
-  elements.resultSection.classList.add("hidden");
-  clearHomeError();
-  clearQuestionState();
+class QuizController {
+  constructor(repository, view) {
+    this.repository = repository;
+    this.view = view;
+    this.session = null;
+    this.selectedChoiceIndex = null;
+  }
+
+  initialize() {
+    this.view.showHome();
+    this.view.startButton.addEventListener("click", () => this.startQuiz());
+    this.view.choicesContainer.addEventListener("click", (event) => this.selectChoice(event));
+    this.view.submitAnswerButton.addEventListener("click", () => this.submitAnswer());
+    this.view.nextQuestionButton.addEventListener("click", () => this.goToNextQuestion());
+    this.view.homeButton.addEventListener("click", () => this.returnHome());
+  }
+
+  async startQuiz() {
+    this.view.clearHomeError();
+
+    try {
+      if (this.repository.questions.length === 0) {
+        await this.repository.load();
+      }
+
+      const { field, difficulty, mode } = this.view.getSelectedConditions();
+      const questionSet = this.repository.createQuestionSet(field, difficulty, mode);
+      this.session = new QuizSession(questionSet);
+      this.selectedChoiceIndex = null;
+      this.view.showQuiz();
+      this.renderCurrentQuestion();
+    } catch (error) {
+      this.session = null;
+      this.view.showHomeError(error.message || "問題データの読み込み中にエラーが発生しました。");
+    }
+  }
+
+  renderCurrentQuestion() {
+    const question = this.session.getCurrentQuestion();
+    this.selectedChoiceIndex = null;
+    this.view.renderQuestion(question, this.session.getCurrentQuestionNumber(), this.session.totalQuestions);
+  }
+
+  selectChoice(event) {
+    const choiceButton = event.target.closest(".choice-button");
+
+    if (!choiceButton || !this.session || this.session.isCurrentQuestionAnswered()) {
+      return;
+    }
+
+    this.selectedChoiceIndex = Number(choiceButton.dataset.index);
+    this.view.renderSelectedChoice(this.selectedChoiceIndex);
+  }
+
+  submitAnswer() {
+    if (!this.session) {
+      return;
+    }
+
+    if (this.session.isCurrentQuestionAnswered()) {
+      this.view.showQuestionError("この問題はすでに解答済みです。次の問題へ進んでください。");
+      return;
+    }
+
+    if (this.selectedChoiceIndex === null) {
+      this.view.showQuestionError("選択肢を選んでください。");
+      return;
+    }
+
+    const question = this.session.getCurrentQuestion();
+    const result = this.session.recordAnswer(this.selectedChoiceIndex);
+
+    if (!result.accepted) {
+      this.view.showQuestionError("この問題はすでに解答済みです。次の問題へ進んでください。");
+      return;
+    }
+
+    this.view.showAnswerResult(result.correct, question.getCorrectLabel());
+    this.view.showExplanation(question.explanation);
+  }
+
+  goToNextQuestion() {
+    if (!this.session) {
+      return;
+    }
+
+    if (!this.session.isCurrentQuestionAnswered()) {
+      this.view.showQuestionError("先に解答してください。");
+      return;
+    }
+
+    this.session.moveToNextQuestion();
+
+    if (this.session.isFinished()) {
+      this.view.renderFinalResult(this.session);
+      this.view.showResult();
+      return;
+    }
+
+    this.renderCurrentQuestion();
+  }
+
+  returnHome() {
+    this.session = null;
+    this.selectedChoiceIndex = null;
+    this.view.showHome();
+  }
 }
 
-function showQuiz() {
-  elements.homeSection.classList.add("hidden");
-  elements.quizSection.classList.remove("hidden");
-  elements.resultSection.classList.add("hidden");
-}
+const repository = new QuestionRepository();
+const view = new QuizView();
+const controller = new QuizController(repository, view);
 
-function showResult() {
-  elements.homeSection.classList.add("hidden");
-  elements.quizSection.classList.add("hidden");
-  elements.resultSection.classList.remove("hidden");
-}
-
-function showHomeError(message) {
-  elements.homeError.textContent = message;
-}
-
-function clearHomeError() {
-  elements.homeError.textContent = "";
-}
-
-function showQuestionError(message) {
-  elements.questionMessage.textContent = message;
-  elements.questionMessage.className = "message error";
-}
-
-function showAnswerResult(correct, correctLabel) {
-  elements.questionMessage.textContent = correct ? "正解です。" : `不正解です。正解は ${correctLabel} です。`;
-  elements.questionMessage.className = correct ? "message correct" : "message wrong";
-}
-
-function showExplanation(explanation) {
-  elements.explanationArea.textContent = explanation;
-  elements.explanationArea.classList.remove("hidden");
-}
-
-function clearQuestionState() {
-  elements.questionMessage.textContent = "";
-  elements.questionMessage.className = "message";
-  elements.explanationArea.textContent = "";
-  elements.explanationArea.classList.add("hidden");
-  elements.choicesContainer.querySelectorAll(".choice-button").forEach((button) => {
-    button.classList.remove("selected");
-  });
-}
-
-initialize();
+controller.initialize();
