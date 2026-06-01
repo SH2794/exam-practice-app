@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>基本情報技術者試験 問題演習</title>
+  <link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+  <main class="app">
+    <section id="home-section" class="screen">
+      <div class="panel">
+        <h1>基本情報技術者試験 問題演習</h1>
+        <div class="form-grid">
+          <label for="field-select">分野</label>
+          <select id="field-select">
+            <option value="all">全分野</option>
+            <option value="テクノロジ系">テクノロジ系</option>
+            <option value="マネジメント系">マネジメント系</option>
+            <option value="ストラテジ系">ストラテジ系</option>
+          </select>
+          <label for="difficulty-select">難易度</label>
+          <select id="difficulty-select">
+            <option value="all">全難易度</option>
+            <option value="初級">初級</option>
+            <option value="中級">中級</option>
+            <option value="上級">上級</option>
+          </select>
+          <label for="mode-select">出題方式</label>
+          <select id="mode-select">
+            <option value="random">ランダム出題</option>
+            <option value="sequential">順番出題</option>
+          </select>
+        </div>
+        <button id="start-button" class="primary-button" type="button">演習開始</button>
+        <p id="home-error" class="message error-message" aria-live="polite"></p>
+      </div>
+    </section>
+
+    <section id="quiz-section" class="screen hidden">
+      <div class="panel quiz-panel">
+        <div class="quiz-header">
+          <p id="question-counter" class="question-counter">第 1 / 5 問</p>
+          <div class="meta-list">
+            <span>分野: <strong id="quiz-meta-field"></strong></span>
+            <span>難易度: <strong id="quiz-meta-difficulty"></strong></span>
+            <span>カテゴリ: <strong id="quiz-meta-category"></strong></span>
+          </div>
+        </div>
+        <p id="question-text" class="question-text"></p>
+        <div id="choices-container" class="choices" role="group" aria-label="選択肢"></div>
+        <div class="action-row">
+          <button id="submit-answer-button" class="primary-button" type="button">解答する</button>
+          <button id="next-question-button" class="secondary-button" type="button">次の問題</button>
+        </div>
+        <p id="question-message" class="message" aria-live="polite"></p>
+        <div id="explanation-area" class="explanation hidden"></div>
+      </div>
+    </section>
+
+    <section id="result-section" class="screen hidden">
+      <div class="panel result-panel">
+        <h2>演習結果</h2>
+        <dl class="result-list">
+          <div>
+            <dt>出題数</dt>
+            <dd id="result-total">5問</dd>
+          </div>
+          <div>
+            <dt>正解数</dt>
+            <dd id="result-correct">0問</dd>
+          </div>
+          <div>
+            <dt>不正解数</dt>
+            <dd id="result-wrong">0問</dd>
+          </div>
+          <div>
+            <dt>正答率</dt>
+            <dd id="result-accuracy">0%</dd>
+          </div>
+        </dl>
+        <button id="home-button" class="primary-button" type="button">ホームへ戻る</button>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>

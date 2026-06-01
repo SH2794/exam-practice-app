@@ -1,0 +1,11 @@
+{
+  "name": "fe-exam-practice-app",
+  "version": "1.0.0",
+  "description": "基本情報技術者試験向けのローカル問題演習アプリ",
+  "scripts": {
+    "start": "http-server -c-1 -p 8080"
+  },
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  }
+}
