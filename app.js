@@ -1,9 +1,8 @@
 class Question {
-  constructor(dataUrl = "./question.json") {
-    this.dataUrl = dataUrl;
+  constructor() {
+    this.dataUrl = "./question.json";//.jsonはAIに作成してもらいました。
     this.questionCount = 5;
     this.choiceLabels = ["A", "B", "C", "D"];
-    this.notEnoughQuestionsMessage = "選択条件に一致する問題が5問未満です。条件を変更してください。";
     this.allQuestions = [];
     this.quizQuestions = [];
     this.currentQuestionIndex = 0;
@@ -11,7 +10,7 @@ class Question {
     this.wrongCount = 0;
     this.selectedChoiceIndex = null;
     this.currentQuestionAnswered = false;
-    this.elements = {
+    this.elements = {                             //id名をまとめて取得
       homeSection: document.querySelector("#home-section"),
       quizSection: document.querySelector("#quiz-section"),
       resultSection: document.querySelector("#result-section"),
@@ -39,7 +38,7 @@ class Question {
   }
 
   initialize() {
-    this.showHome();
+    this.showHome();//起動直後、ホーム画面を表示
     this.elements.startButton.addEventListener("click", () => this.startQuiz());
     this.elements.choicesContainer.addEventListener("click", (event) => this.selectChoice(event));
     this.elements.submitAnswerButton.addEventListener("click", () => this.submitAnswer());
@@ -47,7 +46,7 @@ class Question {
     this.elements.homeButton.addEventListener("click", () => this.returnHome());
   }
 
-  async loadQuestions() {
+  async loadQuestions() {//jsonファイル読み込み
     const response = await fetch(this.dataUrl);
 
     if (!response.ok) {
@@ -60,10 +59,12 @@ class Question {
       throw new Error("question.json の形式が配列ではありません。");
     }
 
-    this.allQuestions = data.map((item) => this.createQuestion(item));
+    this.allQuestions = data.map(function (item) {
+      return this.createQuestion(item);
+    }, this);
   }
 
-  createQuestion(data) {
+  createQuestion(data) {//問題作成
     if (!data || typeof data !== "object") {
       throw new Error("問題データが不正です。");
     }
@@ -84,7 +85,7 @@ class Question {
     return question;
   }
 
-  validateQuestion(question) {
+  validateQuestion(question) {//問題データの確認
     if (!question.id || !question.field || !question.category || !question.difficulty || !question.question) {
       throw new Error("問題データの必須項目が不足しています。");
     }
@@ -98,7 +99,7 @@ class Question {
     }
   }
 
-  async startQuiz() {
+  async startQuiz() {//クイズ画面を起動
     this.clearHomeError();
 
     try {
@@ -129,7 +130,7 @@ class Question {
     const matchedQuestions = this.findByCondition(field, difficulty);
 
     if (matchedQuestions.length < this.questionCount) {
-      throw new Error(this.notEnoughQuestionsMessage);
+      throw new Error("選択条件に一致する問題が5問未満です。条件を変更してください。");
     }
 
     const orderedQuestions = mode === "random" ? this.shuffleQuestions(matchedQuestions) : matchedQuestions;
@@ -144,7 +145,7 @@ class Question {
     });
   }
 
-  shuffleQuestions(questions) {
+  shuffleQuestions(questions) {//問題をランダム表示する機能(難しすぎてAIに聞きました)
     const shuffledQuestions = [...questions];
 
     for (let index = shuffledQuestions.length - 1; index > 0; index -= 1) {
@@ -248,11 +249,11 @@ class Question {
     this.showExplanation(question.explanation);
   }
 
-  isCorrect(question, selectedIndex) {
+  isCorrect(question, selectedIndex) {//正誤判定
     return selectedIndex === question.answerIndex;
   }
 
-  getCorrectChoice(question) {
+  getCorrectChoice(question) {//答えを確認
     return question.choices[question.answerIndex];
   }
 
@@ -289,19 +290,19 @@ class Question {
     return Math.round((this.correctCount / this.questionCount) * 100);
   }
 
-  renderFinalResult() {
+  renderFinalResult() {//結果発表
     this.elements.resultTotal.textContent = `${this.questionCount}問`;
     this.elements.resultCorrect.textContent = `${this.correctCount}問`;
     this.elements.resultWrong.textContent = `${this.wrongCount}問`;
     this.elements.resultAccuracy.textContent = `${this.getAccuracyRate()}%`;
   }
 
-  returnHome() {
+  returnHome() {//ホームに戻る
     this.resetQuizState([]);
     this.showHome();
   }
 
-  showHome() {
+  showHome() {//ホーム画面の要素だけ見せる、クイズ画面と結果画面は"hidden"
     this.elements.homeSection.classList.remove("hidden");
     this.elements.quizSection.classList.add("hidden");
     this.elements.resultSection.classList.add("hidden");
@@ -309,13 +310,13 @@ class Question {
     this.clearQuestionState();
   }
 
-  showQuiz() {
+  showQuiz() {//クイズ画面の要素だけ見せる、ホーム画面と結果画面は"hidden"
     this.elements.homeSection.classList.add("hidden");
     this.elements.quizSection.classList.remove("hidden");
     this.elements.resultSection.classList.add("hidden");
   }
 
-  showResult() {
+  showResult() {//結果画面の要素だけ見せる、ホーム画面とクイズ画面は"hidden"
     this.elements.homeSection.classList.add("hidden");
     this.elements.quizSection.classList.add("hidden");
     this.elements.resultSection.classList.remove("hidden");
@@ -357,4 +358,4 @@ class Question {
 
 const ques = new Question();
 
-ques.initialize();
+ques.initialize();//起動!
